@@ -1,0 +1,1185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>360° Player</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #080a0f;
+    --surface: #0d1117;
+    --surface2: #161b22;
+    --accent: #00d4ff;
+    --accent2: #7c3aed;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --mono: 'Space Mono', monospace;
+    --sans: 'DM Sans', sans-serif;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    overflow: hidden;
+    user-select: none;
+  }
+
+  #canvas-container { position: fixed; inset: 0; background: #000; }
+  canvas#three-canvas { width: 100% !important; height: 100% !important; display: block; }
+
+  #hud {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    display: flex; flex-direction: column;
+    justify-content: space-between;
+  }
+
+  #topbar {
+    pointer-events: auto;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 24px;
+    background: linear-gradient(to bottom, rgba(8,10,15,0.85) 0%, transparent 100%);
+  }
+
+  #logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.2em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  #status-row { display: flex; gap: 12px; align-items: center; }
+
+  .badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: 4px 8px;
+    border-radius: 3px;
+    border: 1px solid;
+    text-transform: uppercase;
+  }
+  .badge-live { color: #ff4444; border-color: #ff444440; background: #ff444415; }
+  .badge-ambi { color: var(--accent); border-color: #00d4ff40; background: #00d4ff10; }
+  .badge-360  { color: #a78bfa; border-color: #a78bfa40; background: #a78bfa10; }
+  .badge-xr   { color: #34d399; border-color: #34d39940; background: #34d39910; }
+
+  #delay-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    padding: 4px 8px;
+    border-radius: 3px;
+    border: 1px solid rgba(255,212,0,0.3);
+    background: rgba(255,212,0,0.08);
+    color: #ffd400;
+    display: none;
+  }
+
+  #controls {
+    pointer-events: auto;
+    padding: 0 24px 24px;
+    background: linear-gradient(to top, rgba(8,10,15,0.92) 0%, transparent 100%);
+  }
+
+  #progress-area { margin-bottom: 14px; }
+
+  #seekbar {
+    width: 100%; height: 3px;
+    background: rgba(255,255,255,0.12);
+    border-radius: 2px;
+    cursor: pointer;
+    position: relative;
+    overflow: visible;
+  }
+
+  #seekbar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent2), var(--accent));
+    border-radius: 2px;
+    width: 0%;
+    transition: width 0.3s linear;
+  }
+
+  #seekbar-thumb {
+    position: absolute;
+    top: 50%; right: -5px;
+    transform: translateY(-50%);
+    width: 10px; height: 10px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent);
+    transition: right 0.3s linear;
+  }
+
+  #ctrl-row { display: flex; align-items: center; gap: 16px; }
+
+  .ctrl-btn {
+    background: none; border: none;
+    color: var(--text);
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 6px;
+    transition: background 0.15s, color 0.15s;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .ctrl-btn:hover { background: rgba(255,255,255,0.08); color: var(--accent); }
+
+  #time-display {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  #vol-row { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+
+  #vol-slider {
+    -webkit-appearance: none;
+    width: 80px; height: 3px;
+    background: rgba(255,255,255,0.15);
+    border-radius: 2px;
+    outline: none;
+    cursor: pointer;
+  }
+  #vol-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 6px var(--accent);
+  }
+
+  #xr-btn {
+    margin-left: 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    padding: 7px 14px;
+    background: linear-gradient(135deg, var(--accent2), #5b21b6);
+    border: none;
+    border-radius: 4px;
+    color: #fff;
+    cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    text-transform: uppercase;
+  }
+  #xr-btn:hover { opacity: 0.85; transform: scale(1.03); }
+  #xr-btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none; }
+
+  #ambi-viz {
+    position: fixed;
+    bottom: 110px; right: 24px;
+    width: 80px; height: 80px;
+    pointer-events: none;
+  }
+
+  #loader {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 24px;
+    z-index: 100;
+    transition: opacity 0.5s;
+  }
+
+  #loader h1 {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  #drop-zone {
+    width: 480px; max-width: 90vw;
+    border: 1px dashed rgba(0,212,255,0.3);
+    border-radius: 8px;
+    padding: 40px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  #drop-zone:hover, #drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(0,212,255,0.05);
+  }
+  #drop-zone p { color: var(--muted); font-size: 14px; line-height: 1.6; }
+  #drop-zone strong { color: var(--text); font-weight: 500; }
+  #drop-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  .url-row { display: flex; gap: 8px; width: 480px; max-width: 90vw; }
+
+  .url-row input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 4px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .url-row input:focus { border-color: var(--accent); }
+  .url-row input::placeholder { color: var(--muted); }
+
+  .url-row button {
+    background: var(--accent);
+    border: none; border-radius: 4px;
+    padding: 10px 18px;
+    color: #000;
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: opacity 0.2s;
+  }
+  .url-row button:hover { opacity: 0.8; }
+
+  .or-divider {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.2em;
+  }
+
+  #spinner {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(8,10,15,0.7);
+    align-items: center; justify-content: center;
+    z-index: 200;
+  }
+  #spinner.show { display: flex; }
+
+  .spin-ring {
+    width: 48px; height: 48px;
+    border: 2px solid rgba(0,212,255,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #toast {
+    position: fixed; bottom: 100px; left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--surface2);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px;
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--text);
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+    z-index: 300;
+    white-space: nowrap;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  #gyro-badge {
+    position: fixed; top: 60px; right: 24px;
+    font-family: var(--mono); font-size: 10px;
+    letter-spacing: 0.1em;
+    color: #34d399;
+    border: 1px solid #34d39940;
+    background: #34d39910;
+    padding: 4px 8px; border-radius: 3px;
+    display: none;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+
+<!-- Elementos en DOM desde el inicio — necesario para Web Audio API -->
+<video id="hidden-video" playsinline crossorigin="anonymous" muted
+  style="position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;top:-9999px"></video>
+<audio id="hidden-audio" crossorigin="anonymous"
+  style="position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;top:-9999px"></audio>
+
+<!-- Source loader -->
+<div id="loader">
+  <h1>360° Ambisonics Player</h1>
+  <div class="url-row">
+    <input type="text" id="video-url-input" placeholder="URL manifest .mpd — vídeo + audio ambisonics" />
+    <button onclick="loadFromURL()">Cargar</button>
+  </div>
+  <span class="or-divider">— o arrastra un fichero —</span>
+  <div id="drop-zone">
+    <input type="file" id="file-input" accept="video/*,.mpd,.m3u8" onchange="loadFile(this)">
+    <p><strong>Arrastra tu manifest o vídeo 360°</strong><br>MPD equirectangular con audio ambisonics</p>
+  </div>
+</div>
+
+<!-- Spinner -->
+<div id="spinner"><div class="spin-ring"></div></div>
+
+<!-- Three.js canvas -->
+<div id="canvas-container">
+  <canvas id="three-canvas"></canvas>
+</div>
+
+<!-- Ambisonics visualizer -->
+<div id="ambi-viz"><canvas id="ambi-canvas" width="80" height="80"></canvas></div>
+
+<!-- Gyro badge -->
+<div id="gyro-badge">◎ GYRO</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="topbar">
+    <div id="logo">360° · Ambisonics · WebXR</div>
+    <div id="status-row">
+      <span class="badge badge-360">equirect</span>
+      <span class="badge badge-ambi" id="ambi-badge" style="display:none">ambi B-fmt</span>
+      <span class="badge badge-live" id="live-badge" style="display:none">● live</span>
+      <span class="badge badge-xr"  id="xr-badge"   style="display:none">WebXR</span>
+      <span id="delay-badge">⏱ --s</span>
+    </div>
+  </div>
+
+  <div id="controls">
+    <div id="progress-area">
+      <div id="seekbar" onclick="seekTo(event)">
+        <div id="seekbar-fill"></div>
+        <div id="seekbar-thumb"></div>
+      </div>
+    </div>
+    <div id="ctrl-row">
+      <button class="ctrl-btn" id="play-btn" onclick="togglePlay()" title="Play/Pause">▶</button>
+      <button class="ctrl-btn" onclick="skipBack()" title="-10s">↺</button>
+      <button class="ctrl-btn" onclick="skipFwd()"  title="+10s">↻</button>
+      <span id="time-display">0:00 / 0:00</span>
+      <div id="vol-row">
+        <button class="ctrl-btn" id="mute-btn" onclick="toggleMute()" title="Mute">🔊</button>
+        <input type="range" id="vol-slider" min="0" max="1" step="0.02" value="1" oninput="setVolume(this.value)">
+      </div>
+      <button class="ctrl-btn" onclick="resetView()" title="Centrar vista">⊙</button>
+      <button class="ctrl-btn" onclick="toggleFS()"  title="Pantalla completa">⛶</button>
+      <button id="xr-btn" disabled onclick="enterXR()">VR</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.3.6/shaka-player.compiled.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/numeric@1.2.6/numeric-1.2.6.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/spherical-harmonic-transform@0.1.1/bundle/spherical-harmonic-transform.js"></script>
+
+<script type="module">
+import HOASTBinDecoder from './hoast360/dependencies/HoastBinauralDecoder.js'; 
+import HOASTRotator from './hoast360/dependencies/HoastRotator.js'
+import HOASTloader from './hoast360/dependencies/HoastLoader.js'
+import MatrixMultiplier from './hoast360/dependencies/MatrixMultiplier.js';
+import { zoomMtx, stepsize, minZoomfactor, maxZoomfactor } from './hoast360/dependencies/HoastZoom.js';
+
+// ══════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════
+let renderer, scene, camera, sphere, videoTexture;
+let videoEl   = document.getElementById('hidden-video');
+let audioEl   = document.getElementById('hidden-audio');
+let shakaVideo = null;
+let shakaAudio = null;
+let audioCtx   = null, gainNode = null;
+let ambiPanner = null;
+let xrSession  = null;
+let isDragging = false, prevMouse = {x:0, y:0};
+let yaw = 0, pitch = 0;
+let useGyro = false;
+let deviceOrientation = {alpha:0, beta:90, gamma:0};
+let ambiAnalyser = null, ambiTimeDomain = null;
+let syncInterval = null;
+let rotator = null;
+let decoder = null;
+let multiplier = null;
+let zoomIndex = -1
+
+// ══════════════════════════════════════════════════════
+// THREE.JS SETUP
+// ══════════════════════════════════════════════════════
+function initThree() {
+  const canvas = document.getElementById('three-canvas');
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
+  camera.position.set(0, 0, 0);  // exactamente en el origen
+
+  // Esfera grande centrada en el origen
+  // scale(-1,1,1) invierte las normales para ver desde dentro
+  const geo = new THREE.SphereGeometry(100, 60, 40);
+  geo.scale(-1, 1, 1);
+  sphere = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: 0x111111 }));
+  sphere.position.set(0, 0, 0);  // centrada en el origen
+  scene.add(sphere);
+
+  window.addEventListener('resize', () => {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+  });
+
+  setupPointerControls();
+  setupGyro();
+  checkWebXR();
+  initDebugPanel();
+  renderLoop();
+}
+
+// ══════════════════════════════════════════════════════
+// RENDER LOOP
+// ══════════════════════════════════════════════════════
+function renderLoop() {
+  if (!renderer.xr.isPresenting) {
+    requestAnimationFrame(renderLoop);
+    applyRotation();
+  }
+  if (videoEl && videoEl.readyState >= 2) {
+    if (videoTexture) videoTexture.needsUpdate = true;
+    updateProgress();
+  }
+  updateAmbiViz();
+  renderer.render(scene, camera);
+}
+
+function getZoomFactor() {
+  const minFOV = 30;  // fully zoomed
+  const maxFOV = 100; // fully wide
+
+  const minScale = 1;
+  const maxScale = 2.5;
+
+  const scale = maxScale - (camera.fov - minFOV) * (maxScale - minScale) / (maxFOV - minFOV);
+
+  return scale;
+}
+
+function applyRotation() {
+  if (useGyro) {
+    const a = THREE.MathUtils.degToRad(deviceOrientation.alpha || 0);
+    const b = THREE.MathUtils.degToRad(deviceOrientation.beta  || 90);
+    const g = THREE.MathUtils.degToRad(deviceOrientation.gamma || 0);
+    camera.quaternion.setFromEuler(new THREE.Euler(b - Math.PI/2, a, -g, 'YXZ'));
+  } else {
+    const qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), yaw);
+    const qX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), pitch);
+    camera.quaternion.copy(qY).multiply(qX);
+  }
+
+  if(rotator){
+    rotator.updateRotationFromCamera(camera.matrixWorld.elements)
+  }
+
+  if(multiplier){
+    let newZoomIndex = Math.round((getZoomFactor() - minZoomfactor) / stepsize);
+    if(newZoomIndex != zoomIndex) {
+      multiplier.updateMtx(zoomMtx[newZoomIndex]);
+      zoomIndex = newZoomIndex;
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// LOADING
+// ══════════════════════════════════════════════════════
+function loadFromURL() {
+  const src = document.getElementById('video-url-input').value.trim();
+  if (!src) return;
+  startManifest(src);
+}
+
+function loadFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  startManifest(URL.createObjectURL(file));
+}
+
+async function startManifest(src) {
+  showSpinner(true);
+  hideLoader();
+
+  // Limpiar players anteriores
+  if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+  if (shakaVideo) { try { await shakaVideo.destroy(); } catch(e){} shakaVideo = null; }
+  if (shakaAudio) { try { await shakaAudio.destroy(); } catch(e){} shakaAudio = null; }
+
+  videoEl.pause();
+  audioEl.pause();
+  videoEl.muted = true;
+
+  if (src.endsWith('.mpd')) {
+    await loadDualShaka(src);
+  } else {
+    // Fichero local sin ambisonics
+    videoEl.src = src;
+    videoEl.muted = false;
+    videoEl.loop = true;
+    videoEl.addEventListener('canplay', () => {
+      showSpinner(false);
+      attachVideoTexture();
+      videoEl.play();
+      updatePlayBtn();
+    }, { once: true });
+    videoEl.addEventListener('error', () => {
+      showSpinner(false);
+      toast('Error cargando fichero');
+    });
+    videoEl.load();
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// DUAL SHAKA — mismo manifest
+// Shaka 1 → <video> muted → Three.js
+// Shaka 2 → <audio>       → Web Audio FOA
+// ══════════════════════════════════════════════════════
+async function loadDualShaka(src) {
+  const shakaConfig = {
+    streaming: {
+      bufferingGoal: 1.5,
+      rebufferingGoal: 0.8,
+      bufferBehind: 3,
+      segmentPrefetchLimit: 2,
+      updateIntervalSeconds: 0.1,
+      lowLatencyMode: true,
+      inaccurateManifestTolerance: 0,
+      stallEnabled: true,
+      stallThreshold: 1,
+      stallSkip: 0.1,
+      retryParameters: {
+        maxAttempts: 5,
+        baseDelay: 50,
+        backoffFactor: 1.2,
+        fuzzFactor: 0.1,
+      },
+    },
+    abr: { enabled: false, defaultBandwidthEstimate: 5000000 },
+    manifest: {
+      retryParameters: { maxAttempts: 10, baseDelay: 50, backoffFactor: 1.1 },
+      dash: {
+        autoCorrectDrift: true,
+        ignoreSuggestedPresentationDelay: true,
+      },
+    },
+  };
+
+  try {
+    // ── Shaka 1: vídeo (muted) → Three.js ──────────
+    shakaVideo = new shaka.Player(videoEl);
+    shakaVideo.configure(shakaConfig);
+    await shakaVideo.load(src);
+
+    showSpinner(false);
+    attachVideoTexture();
+    updatePlayBtn();
+
+    const isLive = !isFinite(videoEl.duration);
+    if (isLive) {
+      document.getElementById('live-badge').style.display = 'inline';
+      document.getElementById('delay-badge').style.display = 'inline';
+      videoEl.currentTime = shakaVideo.seekRange().end - 0.5;
+    }
+    videoEl.play();
+
+    // ── Shaka 2: mismo manifest → <audio> → Web Audio
+    shakaAudio = new shaka.Player(audioEl);
+    shakaAudio.configure({
+      ...shakaConfig,
+      // Preferir audio, ignorar vídeo
+      preferredAudioLanguage: 'und',
+      preferredVideoCodecs: [],
+      preferredAudioCodecs: ['mp4a.40.2', 'opus', 'ac-3', 'ec-3'],
+    });
+
+    await shakaAudio.load(src);
+
+    // Seleccionar la pista de menor bandwidth — preferir audio only
+    const variants = shakaAudio.getVariantTracks();
+    console.log('[shakaAudio] variants disponibles:', variants.length);
+    variants.forEach(v => console.log(
+      '  id:', v.id,
+      '| bandwidth:', v.bandwidth,
+      '| audioCodec:', v.audioCodec,
+      '| videoCodec:', v.videoCodec || 'none'
+    ));
+
+    // Buscar pista con menor bandwidth (generalmente audio only)
+    const sorted = [...variants].sort((a, b) => a.bandwidth - b.bandwidth);
+    if (sorted.length > 0) {
+      shakaAudio.selectVariantTrack(sorted[0], true);
+      console.log('[shakaAudio] seleccionada pista:', sorted[0].id, '| bw:', sorted[0].bandwidth);
+    }
+
+    // Sincronizar currentTime con el vídeo
+    audioEl.currentTime = videoEl.currentTime;
+    audioEl.play();
+
+    // ── Sincronía continua A/V ──────────────────────
+    syncInterval = setInterval(() => {
+      if (!audioEl || !videoEl) return;
+      const diff = Math.abs(audioEl.currentTime - videoEl.currentTime);
+      if (diff > 0.3) {
+        audioEl.currentTime = videoEl.currentTime;
+        console.log('[sync] corrigiendo audio drift:', diff.toFixed(3) + 's');
+      }
+      if (audioEl.playbackRate !== videoEl.playbackRate) {
+        audioEl.playbackRate = videoEl.playbackRate;
+      }
+      if (videoEl.paused && !audioEl.paused) audioEl.pause();
+      if (!videoEl.paused && audioEl.paused) audioEl.play().catch(()=>{});
+    }, 500);
+
+    // ── FOA decode via Web Audio ────────────────────
+    await setupFOA();
+
+    // ── Watchdog live edge ──────────────────────────
+    setInterval(() => {
+      if (videoEl.paused || videoEl.seeking || videoEl.buffered.length === 0) return;
+      const range = shakaVideo.seekRange();
+      const delay = range.end - videoEl.currentTime;
+
+      const badge = document.getElementById('delay-badge');
+      badge.textContent = '⏱ ' + delay.toFixed(1) + 's';
+      badge.style.color       = delay > 3 ? '#ff4444' : delay > 1.5 ? '#ffd400' : '#34d399';
+      badge.style.borderColor = badge.style.color + '40';
+      badge.style.background  = badge.style.color.replace(')', ',0.08)').replace('rgb','rgba');
+
+      if (!isFinite(videoEl.duration)) {
+        if (delay > 6) {
+          videoEl.currentTime = range.end - 0.5;
+          videoEl.playbackRate = 1.0;
+        } else if (delay > 2.5) {
+          videoEl.playbackRate = Math.min(1.15, 1 + (delay - 2.5) * 0.05);
+        } else if (delay > 1.5) {
+          videoEl.playbackRate = 1.05;
+        } else if (delay < 0.8) {
+          videoEl.playbackRate = 0.95;
+        } else {
+          videoEl.playbackRate = 1.0;
+        }
+      }
+    }, 500);
+
+    window._shakaVideo = shakaVideo;
+    window._shakaAudio = shakaAudio;
+    toast('Cargando manifest…');
+
+  } catch(e) {
+    showSpinner(false);
+    toast('Error: ' + e.message);
+    console.error(e);
+  }
+}
+
+function attachVideoTexture() {
+  if (videoTexture) videoTexture.dispose();
+  videoTexture = new THREE.VideoTexture(videoEl);
+  videoTexture.minFilter = THREE.LinearFilter;
+  videoTexture.magFilter = THREE.LinearFilter;
+  videoTexture.format = THREE.RGBFormat;
+  sphere.material = new THREE.MeshBasicMaterial({ map: videoTexture });
+}
+
+// ══════════════════════════════════════════════════════
+// FOA DECODE — B-format W/X/Y/Z → binaural estéreo
+// audioEl con Shaka sí es accesible a Web Audio API
+// ══════════════════════════════════════════════════════
+async function setupFOA() {
+  try {
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+    }
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+    const source = audioCtx.createMediaElementSource(audioEl);
+
+    rotator = new HOASTRotator(audioCtx, 1);
+    console.log(rotator);
+
+    decoder = new HOASTBinDecoder(audioCtx, 1);
+    console.log(decoder);
+
+    multiplier = new MatrixMultiplier(audioCtx, 1);
+    console.log(multiplier);
+
+    var loader_filters = new HOASTloader(audioCtx, 1, "./hoast360/irs", (foaBuffer, hoaBuffer) => {
+      decoder.updateFilters(foaBuffer, hoaBuffer);
+      loader_filters.load();
+    });
+
+    source.connect(rotator.in);
+
+    rotator.out.connect(multiplier.in);
+    multiplier.out.connect(decoder.in);
+
+    gainNode = audioCtx.createGain();
+    gainNode.gain.value = document.getElementById('vol-slider').value;
+    gainNode.connect(audioCtx.destination);
+
+    decoder.out.connect(gainNode);
+
+    setupAmbiAnalyser();
+    document.getElementById('ambi-badge').style.display = 'inline';
+    toast('Ambisonics FOA activo');
+    console.log('[ambi] FOA activo — <audio> Shaka dual');
+
+  } catch(e) {
+    console.warn('[ambi] FOA falló:', e.message);
+    // Fallback — audio nativo del vídeo
+    videoEl.muted = false;
+    videoEl.volume = document.getElementById('vol-slider').value;
+    toast('Audio nativo (FOA no disponible)');
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// AMBISONICS VISUALIZER
+// ══════════════════════════════════════════════════════
+function setupAmbiAnalyser() {
+  if (!audioCtx || !gainNode) return;
+  ambiAnalyser = audioCtx.createAnalyser();
+  ambiAnalyser.fftSize = 64;
+  gainNode.connect(ambiAnalyser);
+  ambiTimeDomain = new Uint8Array(ambiAnalyser.frequencyBinCount);
+}
+
+function updateAmbiViz() {
+  const c = document.getElementById('ambi-canvas');
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, 80, 80);
+  if (!ambiAnalyser) return;
+
+  ambiAnalyser.getByteFrequencyData(ambiTimeDomain);
+  const cx = 40, cy = 40, r = 28, n = ambiTimeDomain.length;
+
+  ctx.strokeStyle = 'rgba(0,212,255,0.7)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const angle = (i / n) * Math.PI * 2 - Math.PI / 2;
+    const rad = r + (ambiTimeDomain[i] / 255) * 18;
+    const x = cx + Math.cos(angle) * rad;
+    const y = cy + Math.sin(angle) * rad;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.stroke();
+
+  ctx.fillStyle = 'rgba(0,212,255,0.4)';
+  ctx.beginPath();
+  ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+  ctx.fill();
+
+  const yx = cx + Math.cos(-yaw - Math.PI / 2) * (r - 6);
+  const yy = cy + Math.sin(-yaw - Math.PI / 2) * (r - 6);
+  ctx.fillStyle = '#7c3aed';
+  ctx.beginPath();
+  ctx.arc(yx, yy, 3, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+// ══════════════════════════════════════════════════════
+// CONTROLS
+// ══════════════════════════════════════════════════════
+function togglePlay() {
+  if (!videoEl) return;
+  if (videoEl.paused) {
+    videoEl.play();
+    audioEl.play().catch(()=>{});
+    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  } else {
+    videoEl.pause();
+    audioEl.pause();
+  }
+  updatePlayBtn();
+}
+
+function updatePlayBtn() {
+  document.getElementById('play-btn').textContent = videoEl?.paused ? '▶' : '⏸';
+}
+
+function skipBack() {
+  if (!videoEl) return;
+  const t = Math.max(0, videoEl.currentTime - 10);
+  videoEl.currentTime = t;
+  audioEl.currentTime = t;
+}
+
+function skipFwd() {
+  if (!videoEl) return;
+  const t = videoEl.currentTime + 10;
+  videoEl.currentTime = t;
+  audioEl.currentTime = t;
+}
+
+function seekTo(e) {
+  if (!videoEl || !isFinite(videoEl.duration)) return;
+  const rect = e.currentTarget.getBoundingClientRect();
+  const t = ((e.clientX - rect.left) / rect.width) * videoEl.duration;
+  videoEl.currentTime = t;
+  audioEl.currentTime = t;
+}
+
+function updateProgress() {
+  if (!videoEl) return;
+  const dur = videoEl.duration;
+  const cur = videoEl.currentTime;
+  if (isFinite(dur) && dur > 0) {
+    const pct = (cur / dur) * 100;
+    document.getElementById('seekbar-fill').style.width = pct + '%';
+    document.getElementById('seekbar-thumb').style.right = (100 - pct) + '%';
+    document.getElementById('time-display').textContent = fmt(cur) + ' / ' + fmt(dur);
+  } else {
+    document.getElementById('time-display').textContent = fmt(cur) + ' / ∞';
+  }
+}
+
+function fmt(s) {
+  return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+}
+
+function toggleMute() {
+  if (gainNode) {
+    const muted = gainNode.gain.value === 0;
+    gainNode.gain.value = muted ? document.getElementById('vol-slider').value : 0;
+    document.getElementById('mute-btn').textContent = muted ? '🔊' : '🔇';
+  } else if (videoEl) {
+    videoEl.muted = !videoEl.muted;
+    document.getElementById('mute-btn').textContent = videoEl.muted ? '🔇' : '🔊';
+  }
+}
+
+function setVolume(v) {
+  if (gainNode) gainNode.gain.value = v;
+  else if (videoEl) videoEl.volume = v;
+}
+
+function resetView() { yaw = 0; pitch = 0; toast('Vista centrada'); }
+
+function toggleFS() {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+}
+
+// ══════════════════════════════════════════════════════
+// POINTER / TOUCH CONTROLS
+// ══════════════════════════════════════════════════════
+function setupPointerControls() {
+  const c = renderer.domElement;
+  c.addEventListener('mousedown', e => { isDragging = true; prevMouse = {x: e.clientX, y: e.clientY}; });
+  window.addEventListener('mouseup', () => isDragging = false);
+  window.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+    yaw   -= (e.clientX - prevMouse.x) * 0.005;
+    pitch -= (e.clientY - prevMouse.y) * 0.005;
+    pitch  = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+    prevMouse = {x: e.clientX, y: e.clientY};
+  });
+
+  let lastTouch = null;
+  c.addEventListener('touchstart', e => { lastTouch = e.touches[0]; });
+  c.addEventListener('touchmove', e => {
+    if (!lastTouch) return;
+    const t = e.touches[0];
+    yaw   -= (t.clientX - lastTouch.clientX) * 0.005;
+    pitch -= (t.clientY - lastTouch.clientY) * 0.005;
+    pitch  = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+    lastTouch = t;
+    e.preventDefault();
+  }, { passive: false });
+
+  c.addEventListener('wheel', e => {
+    camera.fov = Math.max(30, Math.min(100, camera.fov + e.deltaY * 0.05));
+    camera.updateProjectionMatrix();
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// GYROSCOPE
+// ══════════════════════════════════════════════════════
+function setupGyro() {
+  if (!window.DeviceOrientationEvent) return;
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    document.addEventListener('click', async () => {
+      if ((await DeviceOrientationEvent.requestPermission()) === 'granted') enableGyro();
+    }, { once: true });
+  } else {
+    enableGyro();
+  }
+}
+
+function enableGyro() {
+  window.addEventListener('deviceorientation', e => {
+    if (!e.alpha && !e.beta) return;
+    deviceOrientation = { alpha: e.alpha, beta: e.beta, gamma: e.gamma };
+    if (!useGyro) {
+      useGyro = true;
+      document.getElementById('gyro-badge').style.display = 'block';
+      toast('Giroscopio activado');
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════
+// DEBUG PANEL 3D — visible dentro de las Quest
+// Panel flotante en la escena Three.js
+// ══════════════════════════════════════════════════════
+let debugCanvas = null, debugTexture = null, debugMesh = null;
+let debugLines = [];
+
+function initDebugPanel() {
+  // Canvas 2D para el texto del debug
+  debugCanvas = document.createElement('canvas');
+  debugCanvas.width = 512;
+  debugCanvas.height = 256;
+
+  debugTexture = new THREE.CanvasTexture(debugCanvas);
+
+  const geo = new THREE.PlaneGeometry(1.2, 0.6);
+  const mat = new THREE.MeshBasicMaterial({
+    map: debugTexture,
+    transparent: true,
+    depthTest: false,
+    side: THREE.DoubleSide,
+  });
+
+  debugMesh = new THREE.Mesh(geo, mat);
+  // Posición justo delante del usuario, abajo
+  debugMesh.position.set(0, -0.3, -2);
+  debugMesh.visible = false;
+  scene.add(debugMesh);
+}
+
+function xrDebug(data) {
+  if (!debugCanvas || !debugMesh) return;
+  debugMesh.visible = true;
+
+  const ctx = debugCanvas.getContext('2d');
+  ctx.clearRect(0, 0, 512, 256);
+
+  // Fondo semitransparente
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  ctx.roundRect(4, 4, 504, 248, 12);
+  ctx.fill();
+
+  // Borde
+  ctx.strokeStyle = '#00d4ff';
+  ctx.lineWidth = 2;
+  ctx.roundRect(4, 4, 504, 248, 12);
+  ctx.stroke();
+
+  // Título
+  ctx.fillStyle = '#00d4ff';
+  ctx.font = 'bold 18px monospace';
+  ctx.fillText('XR DEBUG', 16, 30);
+
+  // Líneas de datos
+  ctx.font = '15px monospace';
+  ctx.fillStyle = '#e6edf3';
+  const lines = [
+    `video: ${data.videoState} | muted: ${data.muted}`,
+    `texture: ${data.hasTexture} | readyState: ${data.readyState}`,
+    `pose: ${data.hasPose} | yaw: ${data.yaw}`,
+    `ambi: ${data.hasAmbi} | ctx: ${data.audioCtx}`,
+    `audio: ${data.audioState}`,
+    `frame: ${data.frameCount}`,
+  ];
+  lines.forEach((l, i) => {
+    ctx.fillStyle = i % 2 === 0 ? '#e6edf3' : '#8b949e';
+    ctx.fillText(l, 16, 60 + i * 30);
+  });
+
+  debugTexture.needsUpdate = true;
+}
+
+// ══════════════════════════════════════════════════════
+// WebXR — Oculus Quest 3
+// ══════════════════════════════════════════════════════
+async function checkWebXR() {
+  if (!navigator.xr) return;
+  const ok = await navigator.xr.isSessionSupported('immersive-vr').catch(() => false);
+  if (ok) {
+    document.getElementById('xr-btn').disabled = false;
+    document.getElementById('xr-badge').style.display = 'inline';
+  }
+}
+
+async function enterXR() {
+  if (!navigator.xr) return toast('WebXR no disponible');
+  try {
+    if (xrSession) {
+      await xrSession.end();
+      return;
+    }
+
+    xrSession = await navigator.xr.requestSession('immersive-vr', {
+      requiredFeatures: ['local-floor'],
+      optionalFeatures: ['bounded-floor', 'hand-tracking'],
+    });
+
+    renderer.xr.setReferenceSpaceType('local-floor');
+    await renderer.xr.setSession(xrSession);
+
+    document.getElementById('xr-btn').textContent = 'EXIT VR';
+
+    xrSession.addEventListener('end', () => {
+      xrSession = null;
+      if (debugMesh) debugMesh.visible = false;
+      document.getElementById('xr-btn').textContent = 'VR';
+      renderer.setAnimationLoop(null);
+      requestAnimationFrame(renderLoop);
+    });
+
+    let frameCount = 0;
+
+    renderer.setAnimationLoop((time, frame) => {
+      frameCount++;
+
+      // ── Actualizar textura vídeo ──────────────────
+      if (videoEl && videoEl.readyState >= 2) {
+        if (videoTexture) videoTexture.needsUpdate = true;
+      }
+
+      let hasPose = false;
+      let yawDeg = 0;
+
+      // ── Orientación headset → ambisonics ──────────
+      if (frame) {
+        const refSpace = renderer.xr.getReferenceSpace();
+        if (refSpace) {
+          const pose = frame.getViewerPose(refSpace);
+          if (pose) {
+            hasPose = true;
+            const q = pose.transform.orientation;
+            yaw = Math.atan2(
+              2 * (q.w * q.y + q.x * q.z),
+              1 - 2 * (q.y * q.y + q.z * q.z)
+            );
+            yawDeg = (yaw * 180 / Math.PI).toFixed(1);
+            updateAmbiRotation();
+
+            // Debug panel fijo delante — altura ojo, 2m adelante
+            if (debugMesh) {
+              const pos = pose.transform.position;
+              const ori = pose.transform.orientation;
+              debugMesh.position.set(pos.x, pos.y + 0.1, pos.z - 2);
+              debugMesh.visible = true;
+            }
+          }
+        }
+      }
+
+      // ── Debug panel cada 10 frames ────────────────
+      if (frameCount % 10 === 0) {
+        xrDebug({
+          videoState: videoEl?.paused ? 'paused' : 'playing',
+          muted: videoEl?.muted,
+          hasTexture: !!videoTexture,
+          readyState: videoEl?.readyState,
+          hasPose,
+          yaw: yawDeg + '°',
+          hasAmbi: !!ambiPanner,
+          audioCtx: audioCtx?.state || 'none',
+          audioState: audioEl?.paused ? 'paused' : 'playing',
+          frameCount,
+        });
+      }
+
+      updateAmbiViz();
+      renderer.render(scene, camera);
+    });
+
+    if (videoEl) videoEl.play();
+    if (audioEl) audioEl.play().catch(()=>{});
+    if (audioCtx) audioCtx.resume();
+    toast('Quest 3 VR activo');
+
+  } catch(e) {
+    toast('Error WebXR: ' + e.message);
+    console.error(e);
+  }
+}
+
+// ══════════════════════════════════════════════════════
+// DRAG & DROP
+// ══════════════════════════════════════════════════════
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) startManifest(URL.createObjectURL(file));
+});
+
+// ══════════════════════════════════════════════════════
+// UI HELPERS
+// ══════════════════════════════════════════════════════
+function hideLoader() {
+  const l = document.getElementById('loader');
+  l.style.opacity = '0';
+  setTimeout(() => l.style.display = 'none', 500);
+}
+
+function showSpinner(v) {
+  document.getElementById('spinner').classList.toggle('show', v);
+}
+
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+window.addEventListener('keydown', e => {
+  switch(e.code) {
+    case 'Space':      e.preventDefault(); togglePlay(); break;
+    case 'ArrowLeft':  skipBack(); break;
+    case 'ArrowRight': skipFwd(); break;
+    case 'KeyM':       toggleMute(); break;
+    case 'KeyF':       toggleFS(); break;
+    case 'KeyR':       resetView(); break;
+  }
+});
+
+document.addEventListener('click', () => {
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+});
+
+// ══════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════
+initThree();
+
+window.loadFromURL = loadFromURL;
+</script>
+</body>
+</html>

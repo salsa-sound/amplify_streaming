@@ -374,7 +374,7 @@
       </div>
       <button class="ctrl-btn" onclick="resetView()" title="Centrar vista">⊙</button>
       <button class="ctrl-btn" onclick="toggleFS()"  title="Pantalla completa">⛶</button>
-      <button id="xr-btn" onclick="enterXR()">VR</button>
+      <button id="xr-btn" disabled onclick="enterXR()">VR</button>
     </div>
   </div>
 </div>
@@ -1777,7 +1777,7 @@ async function checkWebXR() {
   if (!navigator.xr) return;
   const ok = await navigator.xr.isSessionSupported('immersive-vr').catch(() => false);
   if (ok) {
-    //document.getElementById('xr-btn').disabled = false;
+    document.getElementById('xr-btn').disabled = false;
     document.getElementById('xr-badge').style.display = 'inline';
   }
 }

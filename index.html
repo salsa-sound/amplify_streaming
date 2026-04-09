@@ -1782,6 +1782,17 @@ async function checkWebXR() {
   }
 }
 
+function updateAmbiRotation() {
+  if (!ambiPanner || !audioCtx) return;
+  const cos = Math.cos(yaw);
+  const sin = Math.sin(yaw);
+  const t = audioCtx.currentTime;
+  ambiPanner.xGainL.gain.setTargetAtTime( cos * 0.35,             t, 0.05);
+  ambiPanner.xGainR.gain.setTargetAtTime( cos * 0.35,             t, 0.05);
+  ambiPanner.yGainL.gain.setTargetAtTime( 0.5*cos - sin*0.35,     t, 0.05);
+  ambiPanner.yGainR.gain.setTargetAtTime(-0.5*cos + sin*0.35,     t, 0.05);
+}
+
 async function enterXR() {
   if (!navigator.xr) return toast('WebXR no disponible');
   try {

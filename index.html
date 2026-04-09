@@ -1023,7 +1023,7 @@ async function checkWebXR() {
   if (!navigator.xr) return;
   const ok = await navigator.xr.isSessionSupported('immersive-vr').catch(() => false);
   if (ok) {
-    document.getElementById('xr-btn').disabled = false;
+    //document.getElementById('xr-btn').disabled = false;
     document.getElementById('xr-badge').style.display = 'inline';
   }
 }
